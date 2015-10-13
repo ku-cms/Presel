@@ -150,8 +150,10 @@ class Presel : public edm::EDFilter {
     edm::InputTag l_jetAK4Area                   ; 
     edm::InputTag l_HbbCands                     ; 
     std::vector<std::string> hltPaths_           ; 
+    std::vector<std::string> metFilters_         ; 
     edm::ParameterSet GenHSelParams_             ; 
     edm::ParameterSet AK4JetSelParams_           ; 
+    edm::ParameterSet AK4TrigJetSelParams_       ; 
     edm::ParameterSet BTaggedLooseAK4SelParams_  ; 
     edm::ParameterSet BTaggedMediumAK4SelParams_  ; 
     edm::ParameterSet AK8JetSelParams_           ; 
@@ -163,6 +165,14 @@ class Presel : public edm::EDFilter {
     double ak4jetsPtMin_                         ;
     double ak4jetsEtaMax_                        ; 
     double HTMin_                                ; 
+    edm::InputTag l_metFiltersName               ; 
+    edm::InputTag l_metFiltersBit                ; 
+    edm::InputTag l_hbheNoiseFilter              ; 
+    edm::InputTag l_vtxRho                       ; 
+    edm::InputTag l_vtxZ                         ; 
+    edm::InputTag l_vtxNdf                       ; 
+    bool _isData				 ;
+    string skipEvents				 ;    
 
     edm::Service<TFileService> fs                ; 
     std::map<std::string, TH1D*> h1_             ; 
@@ -241,8 +251,10 @@ Presel::Presel(const edm::ParameterSet& iConfig) :
   l_jetAK4Area            (iConfig.getParameter<edm::InputTag>     ("jetAK4AreaLabel")),
   l_HbbCands              (iConfig.getParameter<edm::InputTag>     ("HbbCandsLabel")),
   hltPaths_               (iConfig.getParameter<vector<string>>    ("hltPaths")), 
+  metFilters_             (iConfig.getParameter<vector<string>>    ("metFilters")), 
   GenHSelParams_          (iConfig.getParameter<edm::ParameterSet> ("GenHSelParams")),
   AK4JetSelParams_        (iConfig.getParameter<edm::ParameterSet> ("AK4JetSelParams")),
+  AK4TrigJetSelParams_    (iConfig.getParameter<edm::ParameterSet> ("AK4TrigJetSelParams")),
   BTaggedLooseAK4SelParams_ (iConfig.getParameter<edm::ParameterSet> ("BTaggedLooseAK4SelParams")),
   BTaggedMediumAK4SelParams_ (iConfig.getParameter<edm::ParameterSet> ("BTaggedMediumAK4SelParams")),
   AK8JetSelParams_        (iConfig.getParameter<edm::ParameterSet> ("AK8JetSelParams")),
@@ -253,7 +265,15 @@ Presel::Presel(const edm::ParameterSet& iConfig) :
   ak8jetsEtaMax_          (iConfig.getParameter<double>            ("ak8jetsEtaMax")), 
   ak4jetsPtMin_           (iConfig.getParameter<double>            ("ak4jetsPtMin")),
   ak4jetsEtaMax_          (iConfig.getParameter<double>            ("ak4jetsEtaMax")), 
-  HTMin_                  (iConfig.getParameter<double>            ("HTMin"))
+  HTMin_                  (iConfig.getParameter<double>            ("HTMin")),
+  l_metFiltersName        (iConfig.getParameter<edm::InputTag>     ("metFiltersNameLabel")),
+  l_metFiltersBit         (iConfig.getParameter<edm::InputTag>     ("metFiltersBitLabel")),
+  l_hbheNoiseFilter       (iConfig.getParameter<edm::InputTag>     ("hbheNoiseFilterLabel")),
+  l_vtxRho                (iConfig.getParameter<edm::InputTag>     ("vtxRhoLabel")),  
+  l_vtxZ                  (iConfig.getParameter<edm::InputTag>     ("vtxZLabel")),  
+  l_vtxNdf                (iConfig.getParameter<edm::InputTag>     ("vtxNdfLabel")),  
+  _isData		  (iConfig.getParameter<bool>		   ("isData")),
+  skipEvents		  (iConfig.getParameter<string>		   ("skipEvents"))
 {
   produces<unsigned>("ngoodAK4Jets");
   produces<unsigned>("ngoodAK8Jets");
@@ -311,9 +331,18 @@ bool Presel::filter(edm::Event& evt, const edm::EventSetup& iSetup) {
 
   typedef Handle <vector<string>> hstring ; 
   typedef Handle <vector<float>> hfloat ; 
+  typedef Handle <vector<int>> hint ; 
 
   hstring h_trigName             ; evt.getByLabel (l_trigName               , h_trigName             );
   hfloat  h_trigBit              ; evt.getByLabel (l_trigBit                , h_trigBit              ); 
+  hstring h_metFiltersName       ; evt.getByLabel (l_metFiltersName         , h_metFiltersName       );
+  hfloat  h_metFiltersBit        ; evt.getByLabel (l_metFiltersBit          , h_metFiltersBit        ); 
+ 
+  Handle <bool> h_hbheNoiseFilter ; evt.getByLabel (l_hbheNoiseFilter, h_hbheNoiseFilter);
+
+  hfloat  h_vtxRho               ; evt.getByLabel (l_vtxRho                 , h_vtxRho               );
+  hfloat  h_vtxZ                 ; evt.getByLabel (l_vtxZ                   , h_vtxZ                 );
+  hint    h_vtxNdf               ; evt.getByLabel (l_vtxNdf                 , h_vtxNdf               );
   hfloat  h_jetAK8Pt             ; evt.getByLabel (l_jetAK8Pt               , h_jetAK8Pt             );
   hfloat  h_jetAK8Eta            ; evt.getByLabel (l_jetAK8Eta              , h_jetAK8Eta            );
   hfloat  h_jetAK8Phi            ; evt.getByLabel (l_jetAK8Phi              , h_jetAK8Phi            );
@@ -379,6 +408,40 @@ bool Presel::filter(edm::Event& evt, const edm::EventSetup& iSetup) {
 
   //return false ; 
 
+  //Skip event
+
+  unsigned long run, event, lumi;
+
+  run = evt.id().run();
+  event = evt.id().event();
+  lumi = evt.luminosityBlock();
+ 
+
+  vector<string> events;
+  istringstream f(skipEvents);
+  string s;    
+  while (getline(f, s, ';')) {
+      events.push_back(s);
+  }
+  
+  
+
+  for( auto& it : events ) {
+    vector<string> theevt;
+    istringstream f(it);
+    string s;    
+    while (getline(f, s, ',')) {
+      theevt.push_back(s);
+    }
+//    cout << theevt[0] << " " << theevt[1] << " " << theevt[2] << endl;
+//    cout << "Checking " << run << " " << lumi << " " << event << endl;
+
+    if (stoul(theevt[0].c_str(),nullptr,0) == run && stoul(theevt[1].c_str(),nullptr,0) == lumi && stoul(theevt[2].c_str(),nullptr,0) == event ) {
+	cout << "Skipping " << run << " " << lumi << " " << event << endl;
+	return false;
+    }
+  }
+
   unsigned int hltdecisions(0) ; 
   for ( unsigned int i = 0 ; i < h_trigName.product()->size() ; i++ ) {
 //    vector<string>::const_iterator it = find( (h_trigName.product())->begin(), (h_trigName.product())->end(), myhltpath) ; 
@@ -406,9 +469,9 @@ bool Presel::filter(edm::Event& evt, const edm::EventSetup& iSetup) {
   }
   
   if (hltdecisions == 0) return false ; 
+ 
   
-  
-  vlq::JetCollection goodAK8Jets, goodAK4Jets, btaggedlooseAK4, btaggedmediumAK4 ;
+  vlq::JetCollection goodAK8Jets, goodAK4Jets, btaggedlooseAK4, btaggedmediumAK4, goodAK4TrigJets ;
   vector<unsigned> ak4selIdxs, ak8selIdxs, bjetIdxs;
 
   //// Store good AK8 jets
@@ -434,10 +497,6 @@ bool Presel::filter(edm::Event& evt, const edm::EventSetup& iSetup) {
     goodAK8Jets.push_back(jet) ;
     ak8selIdxs.push_back(ijet);
   }
-
-  //// Preselection 2 AK8 jets 
-  if ( goodAK8Jets.size() < 1 ) return false ; 
-  //if ( goodAK8Jets.size() > 1 && ( goodAK8Jets.at(0).getPt() < 300 || goodAK8Jets.at(1).getPt() < 220.) )  return false ; 
 
   //// Store good AK4 jets 
   JetSelector ak4jetsel(AK4JetSelParams_) ;
@@ -473,14 +532,52 @@ bool Presel::filter(edm::Event& evt, const edm::EventSetup& iSetup) {
     }
   }
 
+  // Store good AK4 Jets (Trigger Definition)
+  JetSelector ak4trigjetsel(AK4TrigJetSelParams_) ;
+  bool retak4trigjetsel = false;
+  for ( unsigned ijet = 0; ijet < (h_jetAK4Pt.product())->size(); ++ijet) {
+    retak4trigjetsel = false;
+    if (ak4trigjetsel(evt, ijet, retak4trigjetsel ) == 0)
+       continue;
+    TLorentzVector jetP4 ;
+    jetP4.SetPtEtaPhiM( (h_jetAK4Pt.product())->at(ijet),
+        (h_jetAK4Eta.product())->at(ijet),
+        (h_jetAK4Phi.product())->at(ijet),
+        (h_jetAK4Mass.product())->at(ijet) ) ;
+    vlq::Jet jet;
+    jet.setP4(jetP4) ;
+    jet.setCSV((h_jetAK4CSV.product())->at(ijet)) ;
+    goodAK4TrigJets.push_back(jet) ;
+  }
+  
 
-  //// Preselection at least one b-tagged AK4 jet 
+  HT htak4trig(goodAK4TrigJets);
+  HT htak4(goodAK4Jets) ; 
+  HT htak8(goodAK8Jets) ; 
 
-   if ( goodAK4Jets.size() < 4) return false;
+  //Fill no-cut histos
+
 
   h1_["nak8_nocuts"] -> Fill(goodAK8Jets.size()) ; 
   h1_["nak4_nocuts"] -> Fill(goodAK4Jets.size()) ; 
   h1_["nbloose_nocuts"] -> Fill(btaggedlooseAK4.size()) ; 
+  h1_["htak4_nocuts"] -> Fill(htak4.getHT());
+  h1_["htak4trig_nocuts"] -> Fill(htak4trig.getHT());
+
+
+  for ( vlq::Jet& jet : goodAK4Jets) {
+    h1_["ak4_pt_nocuts"] -> Fill(jet.getPt());
+    h1_["ak4_eta_nocuts"] -> Fill(jet.getEta());
+  }
+
+
+  //// Preselection at least four b-tagged AK4 jet 
+
+   if ( goodAK4Jets.size() < 4) return false;
+
+  //// Preselection one AK8 jet 
+  if ( goodAK8Jets.size() < 1 ) return false ; 
+  //if ( goodAK8Jets.size() > 1 && ( goodAK8Jets.at(0).getPt() < 300 || goodAK8Jets.at(1).getPt() < 220.) )  return false ; 
 
   //// Make W, top and H jets 
   vector<unsigned> seltjets, selhjets, selwjets;
@@ -544,12 +641,43 @@ bool Presel::filter(edm::Event& evt, const edm::EventSetup& iSetup) {
     } 
   }
 
-  HT htak4(goodAK4Jets) ; 
 
 
   //// Preselection HT
   if ( htak4.getHT() < HTMin_ ) return false; 
 
+
+ // Pre-sel: Good primary vertices
+ //
+   if ( _isData ) {
+     unsigned npv(0) ; 
+     for ( unsigned ipv = 0; ipv < (h_vtxRho.product())->size(); ++ipv) {
+        double vtxRho = (h_vtxRho.product())->at(ipv) ; 
+        double vtxZ = (h_vtxZ.product())->at(ipv) ; 
+        double vtxNdf = (h_vtxNdf.product())->at(ipv) ; 
+        if ( abs(vtxRho) < 2. && abs(vtxZ) <= 24. && vtxNdf > 4 ) ++npv ; 
+     }
+     if ( npv < 1 ) return false ; 
+
+   //h1_["cutflow"] -> AddBinContent(3, evtwt) ; 
+ //  h1_["cutflow_nowt"] -> AddBinContent(3) ; 
+ //
+ // Pre-sel: MET filters: CSC beam halo and HBHE noise filters
+     bool hbheNoiseFilter = h_hbheNoiseFilter.product() ; 
+     if ( !hbheNoiseFilter ) return false ; 
+
+     bool metfilterdecision(1) ; 
+       for ( const string& metfilter : metFilters_ ) {
+         vector<string>::const_iterator it ; 
+         for (it = (h_metFiltersName.product())->begin(); it != (h_metFiltersName.product())->end(); ++it) {
+           if ( it->find(metfilter) < std::string::npos) {
+             metfilterdecision *= (h_metFiltersBit.product())->at( it - (h_metFiltersName.product())->begin() ) ; 
+           }
+         }
+       }
+     if ( !metfilterdecision ) return false ; 
+
+   }
 
   if (goodAK4Jets.size() > 0) {
     std::sort(goodAK4Jets.begin(), goodAK4Jets.end(), Utilities::sortByCSV) ; 
@@ -557,7 +685,6 @@ bool Presel::filter(edm::Event& evt, const edm::EventSetup& iSetup) {
     std::sort(goodAK4Jets.begin(), goodAK4Jets.end(), Utilities::sortByPt<vlq::Jet>) ; 
   }
 
-  HT htak8(goodAK8Jets) ; 
 
 
   //// Pick forwardmost AK4 jet
@@ -749,7 +876,7 @@ void Presel::beginJob() {
   h1_["etaak4highestcsv"] = fs->make<TH1D>("etaak4highestcsv", ";#eta(highest CSV AK4 jet);;" , 80 ,-4. ,4.) ; 
 
   h1_["ptak4forwardmost"] = fs->make<TH1D>("ptak4forwardmost", ";p_T(forwardmost AK4 jet);;" , 100, 0., 2000.) ; 
-  h1_["etaak4forwardmost"] = fs->make<TH1D>("etaak4forwardmost", ";p_T(forwardmost AK4 jet);;" , 80 ,-4. ,4.) ; 
+  h1_["etaak4forwardmost"] = fs->make<TH1D>("etaak4forwardmost", ";#eta(forwardmost AK4 jet);;" , 80 ,-4. ,4.) ; 
 
   h1_["mak8leading"] = fs->make<TH1D>("mak8leading", ";M(leading AK8 jet) [GeV];;" ,100 ,0., 200.) ; 
   h1_["mak8highestm"] = fs->make<TH1D>("mak8highestm", ";M(most massive AK8 jet) [GeV];;" ,100 ,0., 200.) ; 
@@ -777,6 +904,12 @@ void Presel::beginJob() {
   h1_["nak4_nocuts"] = fs->make<TH1D>("nak4_nocuts", ";AK4 jet multiplicity before cuts;;" , 11, -0.5,10.5) ; 
   h1_["nbloose_nocuts"] = fs->make<TH1D>("nbloose_nocuts", ";b jet multiplicity before cuts;;" , 11, -0.5,10.5) ; 
 
+  h1_["ak4_pt_nocuts"] = fs->make<TH1D>("ak4_pt_nocuts", "p_T (all AK4 Jets - no cuts);;" , 100, 0 , 2000);
+  h1_["ak4_eta_nocuts"] = fs->make<TH1D>("ak4_eta_nocuts", "#eta (all AK4 Jets - no cuts);;" , 100, -5, 5);
+
+  h1_["htak4_nocuts"] = fs->make<TH1D>("htak4_nocuts", " H_T (AK4 Jets);;", 300 ,0 ,6000);
+  h1_["htak4trig_nocuts"] = fs->make<TH1D>("htak4trig_nocuts", " H_T (AK4 Jets - Trig. Def);;", 300 ,0 ,6000);
+
   h1_["nak8_presel"] = fs->make<TH1D>("nak8_presel", ";AK8 jet multiplicity;;" , 11, -0.5,10.5) ; 
   h1_["nak4_presel"] = fs->make<TH1D>("nak4_presel", ";AK4 jet multiplicity;;" , 11, -0.5,10.5) ; 
   h1_["nbloose_presel"] = fs->make<TH1D>("nbloose_presel", ";b jet multiplicity (Loose OP);;" , 11, -0.5,10.5) ; 
@@ -803,7 +936,7 @@ void Presel::beginJob() {
   h1_["nwcand"] = fs->make<TH1D>("nwcand", ";W candidate multiplicity;;" , 11, -0.5,10.5) ; 
   h1_["nhcand"] = fs->make<TH1D>("nhcand", ";H candidate multiplicity;;" , 11, -0.5,10.5) ; 
 
-  h1_["ht"] = fs->make<TH1D>("ht" ,";H_T (AK4 jets) [GeV]", 200, 0., 4000.) ; 
+//  h1_["ht"] = fs->make<TH1D>("ht" ,";H_T (AK4 jets) [GeV]", 200, 0., 4000.) ; 
 
   h1_["ptleadinghcand"] = fs->make<TH1D>("ptleadinghcand" ,";p_T (leading H cands) [GeV]", 100, 0., 2000.) ; 
   h1_["ptleadingwcand"] = fs->make<TH1D>("ptleadingwcand" ,";p_T (leading W cands) [GeV]", 100, 0., 2000.) ; 

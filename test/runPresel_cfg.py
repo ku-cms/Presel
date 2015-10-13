@@ -27,12 +27,14 @@ process.presel.hltPaths = cms.vstring ( "HLT_PFHT900_v.*")
 
 process.source = cms.Source("PoolSource",
     # replace 'myfile.root' with the source file you want to use
-    fileNames = cms.untracked.vstring(
+    #fileNames = cms.untracked.vstring(
 
-        'file:/mnt/hadoop/user/uscms01/pnfs/unl.edu/data4/cms/store/user/eschmitz/b2g/Spring15/TToTH/TprimeTToTH_M-1200_LH_TuneCUETP8M1_13TeV-madgraph-pythia8/TprimeTToTH_M-1200_LH/150620_211013/0000/B2GEDMNtuple_1.root',
-    )
+     #   'file:/mnt/hadoop/user/uscms01/pnfs/unl.edu/data4/cms/store/user/eschmitz/b2g/Spring15/TToTH/TprimeTToTH_M-1200_LH_TuneCUETP8M1_13TeV-madgraph-pythia8/TprimeTToTH_M-1200_LH/150620_211013/0000/B2GEDMNtuple_1.root',
+ #   )
+    fileNames = cms.untracked.vstring('root://xrootd.unl.edu//store/group/phys_b2g/B2GAnaFW/TprimeBToTH_M-1200_LH_TuneCUETP8M1_13TeV-madgraph-pythia8/B2GAnaFW_v74x_v6p1_25ns/150930_172819/0000/B2GEDMNtuple_1.root')
+
+
 )
-
 
 process.TFileService = cms.Service("TFileService", fileName = cms.string(options.dataset+".root") )
 
