@@ -88,7 +88,7 @@ presel = cms.EDFilter("Presel",
     ak8jetsEtaMax              = cms.double  (5),
     ak4jetsPtMin               = cms.double  (30),
     ak4jetsEtaMax              = cms.double  (5),
-    HTMin                      = cms.double  (900.),
+    HTMin                      = cms.double  (600.),
     wmassmin                   = cms.double  (50.),
     wmassmax                   = cms.double  (100.),
     scaledmassdropmin          = cms.double  (0.),
@@ -115,7 +115,8 @@ presel = cms.EDFilter("Presel",
       checkstatus    = cms.bool(True),
       ),
     BTaggedLooseAK4SelParams   = defaultBTaggedAK4JetSelectionParameters.clone(jetCSVDiscMin = cms.double(0.423),),
-    BTaggedMediumAK4SelParams   = defaultBTaggedAK4JetSelectionParameters.clone()
+    BTaggedMediumAK4SelParams   = defaultBTaggedAK4JetSelectionParameters.clone(),
+    BTaggedTightAK4SelParams   = defaultBTaggedAK4JetSelectionParameters.clone(jetCSVDiscMin = cms.double(0.97),)
 )
 
 
